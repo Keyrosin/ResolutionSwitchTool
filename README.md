@@ -12,10 +12,12 @@ This tool is a shortcut that will allow to switch between two defined resolution
 1. Place `resolution_switch.py` somewhere convenient (for example in
    `C:\Tools\ResolutionSwitchTool`).
 2. Create a shortcut that points to
-   `pythonw.exe C:\Tools\ResolutionSwitchTool\resolution_switch.py`.
-3. (Optional) Edit the shortcut properties to "Run: Minimized" so no console is
-   shown.
-4. Pin the shortcut to the taskbar for one-click toggling.
+   `python.exe C:\Tools\ResolutionSwitchTool\resolution_switch.py`.
+3. Pin the shortcut to the taskbar for one-click toggling.
+
+The script hides its console window automatically so it can run silently when
+triggered from the taskbar. If you need to debug it from a terminal, add the
+`--show-console` flag to keep the window visible.
 
 Running the script without arguments toggles between:
 
@@ -23,8 +25,11 @@ Running the script without arguments toggles between:
 * **1680 × 1050**
 
 For each resolution, the refresh rate is automatically set to the maximum value
-reported by Windows for that mode. You can override the refresh rate when
-needed:
+reported by Windows for that mode. To reduce the amount of flicker during a
+switch, the tool reuses existing Windows display modes and skips the change if
+the display is already set to the requested values.
+
+You can override the refresh rate when needed:
 
 ```powershell
 python resolution_switch.py --refresh 244
@@ -42,4 +47,11 @@ explicit resolution:
 
 ```powershell
 python resolution_switch.py --set 1680x1050 --refresh 244
+```
+
+To troubleshoot or watch the status messages when running from a terminal, use
+`--show-console`:
+
+```powershell
+python resolution_switch.py --show-console
 ```

@@ -5,13 +5,17 @@ import argparse
 import ctypes
 import sys
 from ctypes import Structure, byref, sizeof
-from ctypes.wintypes import DWORD, WCHAR
+from ctypes.wintypes import DWORD, HWND, WCHAR
 
 
 if sys.platform != "win32":
     raise SystemExit("This tool can only run on Windows.")
 
 user32 = ctypes.windll.user32
+kernel32 = ctypes.windll.kernel32
+
+
+SW_HIDE = 0
 
 
 WORD = ctypes.c_ushort
@@ -75,6 +79,18 @@ DISPLAY_MODES = (
 )
 
 
+def hide_console_window() -> None:
+    """Hide the attached console window if one is present."""
+
+    get_console_window = getattr(kernel32, "GetConsoleWindow", None)
+    if not get_console_window:
+        return
+
+    hwnd: HWND = get_console_window()
+    if hwnd:
+        user32.ShowWindow(hwnd, SW_HIDE)
+
+
 def enum_display_settings(mode_number: int) -> DEVMODE | None:
     devmode = DEVMODE()
     devmode.dmSize = sizeof(DEVMODE)
@@ -122,6 +138,49 @@ def build_devmode(width: int, height: int, refresh_rate: int | None = None) -> D
     return target
 
 
+def select_devmode(width: int, height: int, refresh_rate: int | None = None) -> DEVMODE:
+    """Pick the most stable DEVMODE for the requested width/height pair."""
+
+    best_match: DEVMODE | None = None
+    best_rate = -1
+    mode_index = 0
+
+    while True:
+        candidate = enum_display_settings(mode_index)
+        if candidate is None:
+            break
+
+        if int(candidate.dmPelsWidth) == width and int(candidate.dmPelsHeight) == height:
+            candidate.dmSize = sizeof(DEVMODE)
+            rate = int(candidate.dmDisplayFrequency)
+
+            if refresh_rate is None:
+                if rate and rate > best_rate:
+                    best_rate = rate
+                    best_match = candidate
+            else:
+                if rate == refresh_rate:
+                    return candidate
+                if best_match is None:
+                    best_match = candidate
+        mode_index += 1
+
+    if best_match is None:
+        best_match = build_devmode(width, height, refresh_rate)
+    elif refresh_rate is not None and int(best_match.dmDisplayFrequency) != refresh_rate:
+        best_match = build_devmode(width, height, refresh_rate)
+
+    return best_match
+
+
+def mode_signature(devmode: DEVMODE) -> tuple[int, int, int]:
+    return (
+        int(devmode.dmPelsWidth),
+        int(devmode.dmPelsHeight),
+        int(devmode.dmDisplayFrequency),
+    )
+
+
 def apply_settings(devmode: DEVMODE) -> None:
     result = user32.ChangeDisplaySettingsExW(
         None,
@@ -160,6 +219,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Force a refresh rate (Hz). Defaults to the maximum available for the chosen resolution.",
     )
+    parser.add_argument(
+        "--show-console",
+        action="store_true",
+        help="Keep the console window visible (useful for debugging).",
+    )
     return parser.parse_args()
 
 
@@ -173,6 +237,8 @@ def parse_resolution(value: str) -> tuple[int, int]:
 
 def main() -> None:
     args = parse_args()
+    if not args.show_console:
+        hide_console_window()
     forced_resolution: tuple[int, int] | None = None
     if args.set:
         forced_resolution = parse_resolution(args.set)
@@ -180,12 +246,21 @@ def main() -> None:
     current = get_current_settings()
     target_width, target_height = determine_target_mode(current, forced_resolution)
 
-    devmode = build_devmode(target_width, target_height, args.refresh)
-    apply_settings(devmode)
-    print(
-        f"Switched to {target_width}x{target_height} at {devmode.dmDisplayFrequency or 'default'} Hz",
-    )
+    target_devmode = select_devmode(target_width, target_height, args.refresh)
+
+    if mode_signature(current) == mode_signature(target_devmode):
+        print(
+            f"Already running {target_width}x{target_height} at "
+            f"{target_devmode.dmDisplayFrequency or 'default'} Hz",
+        )
+        return
+
+    apply_settings(target_devmode)
+    target_refresh = int(target_devmode.dmDisplayFrequency)
+    refresh_display = f"{target_refresh} Hz" if target_refresh else "the default refresh rate"
+    print(f"Switched to {target_width}x{target_height} at {refresh_display}")
 
 
 if __name__ == "__main__":
     main()
+
