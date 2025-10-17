@@ -11,9 +11,21 @@ This tool is a shortcut that will allow to switch between two defined resolution
 
 1. Place `resolution_switch.py` somewhere convenient (for example in
    `C:\Tools\ResolutionSwitchTool`).
-2. Create a shortcut that points to
-   `python.exe C:\Tools\ResolutionSwitchTool\resolution_switch.py`.
-3. Pin the shortcut to the taskbar for one-click toggling.
+2. (Recommended) Run the bundled PowerShell script to create a shortcut
+   automatically:
+
+   ```powershell
+   cd C:\Tools\ResolutionSwitchTool
+   powershell -ExecutionPolicy Bypass -File .\create_resolution_switch_shortcut.ps1
+   ```
+
+   Run the command from the folder that contains both files (or pass
+   `-ScriptPath` to point at the Python script explicitly). The shortcut is
+   placed on your desktop as **Resolution Switch.lnk** and targets `pythonw.exe`
+   when available so no console window appears. You can re-run the script with
+   `-ShortcutPath` or `-PythonExecutable` parameters to customize the shortcut
+   location or the interpreter.
+3. Pin the created shortcut to the taskbar for one-click toggling.
 
 The script hides its console window automatically so it can run silently when
 triggered from the taskbar. If you need to debug it from a terminal, add the
